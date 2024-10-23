@@ -10,10 +10,37 @@
 
 # here put the import lib
 import torch
+from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from einops import rearrange
+from einops import rearrange, repeat
+from einops.layers.torch import Rearrange
+
+
+
+class PatchEmbedding(nn.Module):
+    def __init__(self, in_channels: int = 1, patch_size: int = 4, emb_size: int = 16, img_size: int = 28):
+        super().__init__()
+        self.patch_size = patch_size
+        self.input_d = patch_size ** 2
+        self.in_channels = in_channels
+        # self.get_patches = Rearrange()
+        self.liear_pro = nn.Sequential(
+            # 使用卷积层来代替线性层
+            nn.Conv2d(in_channels, emb_size, kernel_size=patch_size, stride=patch_size),
+            Rearrange("b e h w -> b (h w) e")
+        )
+        self.cls_token = nn.Parameter(torch.randn(1, 1, emb_size))
+        self.positions = nn.Parameter(torch.randn(1 + (img_size//patch_size) ** 2, emb_size))
+    
+    def forward(self, x: Tensor) -> Tensor:
+        b, _, _, _ = x.shape
+        x = self.liear_pro(x)
+        cls_token = repeat(self.cls_token, "() n e -> b n e", b = b)
+        x = torch.cat((cls_token, x), dim = 1)
+        x += self.positions
+        return x
 
 
 class Mlp(nn.Module):
