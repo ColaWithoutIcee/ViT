@@ -63,20 +63,19 @@ class Mlp(nn.Module):
 
 class TransformerEncoder(nn.Module):
     
-    def __init__(self, emb_size):
+    def __init__(self, emb_size: int=16, n_heads: int=4):
         super().__init__()
         self.norm = nn.LayerNorm(emb_size)
-        self.MSA = MultiHeadAttention(emb_size)
+        self.MSA = MultiHeadAttention(emb_size, n_heads)
         self.mlp = Mlp(emb_size, emb_size*2)
     
     def forward(self, x):
         x1 = self.norm(x)
-        att_out = self.MSA(x)
+        att_out = self.MSA(x1)
         x2 = x + att_out
         x3 = self.norm(x2)
         mlp_out = self.mlp(x3)
         encoder_out = x2 + mlp_out
-        print(f"encoder_out size {encoder_out.shape}")
         return encoder_out
 
 class ClassificationHead(nn.Module):
@@ -89,7 +88,6 @@ class ClassificationHead(nn.Module):
     def forward(self, x):
         x = self.linear(x)
         x = self.softmax(x)
-        print(f"cls head output: {x.shape}")
         return x
 
 
@@ -114,25 +112,23 @@ class MultiHeadAttention(nn.Module):
         att = torch.einsum("bhal, bhlv -> bhav", att, Values)
         out = rearrange(att, "b h n d -> b n (h d)")
         out =  self.pro(out)
-        print(f"output:{out.shape}")
         return out
 
 
 class Vit(nn.Module):
 
-    def __init__(self, in_channels: int=1, patch_size: int=4, emb_size: int=16, img_size: int=28, encoder_depth = 7):
+    def __init__(self, in_channels: int=1, patch_size: int=4, emb_size: int=16, img_size: int=28, n_heads: int=4, encoder_depth = 7):
         super().__init__()
         # patch embedding
         self.patch_emb = PatchEmbedding(in_channels, patch_size, emb_size, img_size)
         # transformer encoders 
-        self.encoders = nn.Sequential(*[TransformerEncoder(emb_size=emb_size) for _ in range(encoder_depth)])
+        self.encoders = nn.Sequential(*[TransformerEncoder(emb_size=emb_size, n_heads=n_heads) for _ in range(encoder_depth)])
         # classification head
         self.cls_head = ClassificationHead(emb_size)
     
     def forward(self, x):
         tokens = self.patch_emb(x)
         out = self.encoders(tokens)
-        print(f"encoders out: {out.shape}")
         # get the classification token only
         out = out[:,0,:]
         # classification
