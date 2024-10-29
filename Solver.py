@@ -11,6 +11,7 @@
 # here put the import lib
 import torch
 import os
+import time
 from os.path import join
 from tqdm import tqdm
 from ViT import Vit
@@ -34,6 +35,7 @@ class Solver():
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.val_on_epoch = self.args.val_on_epoch
         self.resume = self.args.resume
+        self.model_path = 'weight/' + self.task_name + '_best.pth'
         if self.args.model == 'vit':
             self.model = Vit()
         if not os.path.isdir(self.saveDir):
@@ -48,7 +50,7 @@ class Solver():
         train_size = int(len(data) * 5 / 6)  # 1:5 比例
         train_data = Subset(data, range(train_size))
         val_data = Subset(data, range(train_size, len(data)))
-        num_workers = 0
+        num_workers = 8
         train_loader = DataLoader(train_data, batch_size=self.batch_size, shuffle=True, pin_memory=True, num_workers=num_workers)
         val_loader = DataLoader(val_data, batch_size=self.batch_size, shuffle=False, pin_memory=True, num_workers=num_workers)
         print(f"nums of train data: {len(train_data)}")
@@ -104,6 +106,36 @@ class Solver():
     def _validate_base(self):
         
         pass
+
+    def test(self):
+        
+        num_workers = 8
+        test_data = MNIST("./../data", download=True, train=False, transform=ToTensor())
+        test_loader = DataLoader(test_data, batch_size=self.batch_size, shuffle=False, pin_memory=True, num_workers=num_workers)
+        len_data = len(test_loader)
+        print(f"num of test data: {len_data}")
+        checkpoint = torch.load(self.model_path)
+        print(f"best epoch at : {checkpoint['epoch']}, val_acc: {checkpoint['val_acc']}")
+        self.model.load_state_dict(checkpoint['net'])
+        self.model.cuda()
+        self.model.eval()
+
+        test_acc = 0
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            time_0 = time.time()
+            for batch in tqdm(test_loader, position=0):
+                x, y = batch
+                x = x.to(self.device)
+                y = y.to(self.device)
+                y_hat = self.model(x)
+                correct += torch.sum(torch.argmax(y_hat, dim=1) == y).item()
+                total += len(x)
+            time_1 = time.time()
+            print('inference speed: {:.5f} ms/slice'.format(1000 * (time_1 - time_0) / len_data))
+            test_acc = correct / total
+        print(f"test acc:{test_acc}")
 
     def _validate(self, val_loader):
         correct, total = 0, 0
