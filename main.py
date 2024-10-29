@@ -9,64 +9,41 @@
 '''
 
 # here put the import lib
-import numpy as np
-import torch
-import torch.nn as nn
-from tqdm import tqdm
-from torch.nn import CrossEntropyLoss
-from torchvision.datasets import MNIST
-from torchvision.transforms import ToTensor
-from torch.optim import Adam
-from torch.utils.data import DataLoader
-from ViT import Vit
+import argparse
+from datetime import datetime
+from Solver import Solver
 
 
-transform = ToTensor()
-train_dataset = MNIST(root="./../data", train=True, download=True, transform=transform)
-test_dataset = MNIST(root="./../data", train=True, download=True, transform=transform)
+def main(args):
+    print(args)
+    solver = Solver(args)
+    if args.mode == 'test':
+        solver.test()
+    elif args.mode == 'train':
+        solver.train()
 
-train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
-test_loader = DataLoader(test_dataset, batch_size=8, shuffle=False)
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-n_epoches = 50
-lr = 0.001
-
-model = Vit()
-model.cuda()
-optimizer = Adam(model.parameters(), lr=lr)
-criterion = CrossEntropyLoss()
-model.train()
-for epoch in range(n_epoches):
-    train_loss = 0.0
-    for batch in tqdm(train_loader):
-        x, y = batch
-        x = x.to(device)
-        y = y.to(device)
-        y_hat = model(x)
-        loss = criterion(y_hat, y) / len(x)
-
-        train_loss += loss.item()
-
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-
-    print(f"Epoch {epoch + 1}/{n_epoches} loss: {train_loss:.2f}")
-
- # Test loop
-correct, total = 0, 0
-test_loss = 0.0
-model.eval()
-with torch.no_grad():
-    for batch in test_loader:
-        x, y = batch
-        x = x.to(device)
-        y = y.to(device)
-        y_hat = model(x)
-        loss = criterion(y_hat, y) / len(x)
-        test_loss += loss
-        correct += torch.sum(torch.argmax(y_hat, dim=1) == y).item()
-        total += len(x)
-    print(f"Test loss: {test_loss:.2f}")
-    print(f"Test accuracy: {correct / total * 100:.2f}%")
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    # exp settings
+    parser.add_argument('--mode', default='train', choices=['train', 'test'], 
+                        help='mode for the program')
+    parser.add_argument('--model', default='vit', choices=['vit'],
+                        help='models to classification')
+    # model training settings
+    parser.add_argument('--num_epoch', type=int, default=50, 
+                        help='num of training epoch')
+    parser.add_argument('--val_on_epoch', type=int, default=1,
+                        help='val for each n epochs')
+    parser.add_argument('--batch_size', type=int, default=16,
+                        help="batch size, 1, 2, 4, 16, ...")
+    parser.add_argument('--lr', type=float, default=0.001, 
+                        help="learning rate")
+    parser.add_argument("--resume", type=int, default=0, choices=[0, 1],
+                        help="resume training")
+    # task name
+    parser.add_argument("--task_name", type=str, 
+                        default=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        help='your task name')
+    args = parser.parse_args()
+    main(args)
